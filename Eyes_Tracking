@@ -1,0 +1,75 @@
+import cv2
+import pyautogui
+import numpy as np
+import time
+
+def track_eyes():
+    cap = cv2.VideoCapture(0)
+    screen_width, screen_height = pyautogui.size()
+
+    # Kalibrasyon için sabit zaman
+    calibration_time = 3
+    calibration_started = False
+    eye_positions = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Gözleri tespit etmek için kask göz modeli kullan
+        eyes_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        eyes = eyes_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=10)
+
+        if len(eyes) > 0:
+            eye_centers = []
+
+            for (ex, ey, ew, eh) in eyes:
+                eye_center_x = ex + ew // 2
+                eye_center_y = ey + eh // 2
+                eye_centers.append((eye_center_x, eye_center_y))
+
+                # Gözlerin etrafında bir nokta çiz
+                cv2.circle(frame, (eye_center_x, eye_center_y), 10, (0, 255, 0), -1)
+
+            # İlk göz merkezini al ve ekran koordinatlarına normalize et
+            eye_center_x, eye_center_y = eye_centers[0]
+            mouse_x = int(screen_width * (eye_center_x / frame.shape[1]))
+            mouse_y = int(screen_height * (eye_center_y / frame.shape[0]))
+
+            # Fare imlecini hareket ettir
+            pyautogui.moveTo(mouse_x, mouse_y)
+
+            # Kalibrasyon yapılacaksa göz pozisyonunu kaydet
+            if calibration_started:
+                eye_positions.append((eye_center_x, eye_center_y))
+                if len(eye_positions) >= 10:
+                    # Kalibrasyon tamamlandığında işlem yap
+                    calibration_started = False
+                    print("Kalibrasyon Tamamlandı!")
+                    # İhtiyaç duyulursa kalibrasyon verisi işlenebilir
+
+        else:
+            frame[:] = (0, 0, 255)  # Göz algılanmadığında ekranı kırmızı yap
+
+        # Kullanıcı bilgisi
+        cv2.putText(frame, f'Goz Sayisi: {len(eyes)}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.imshow('Eye Tracker', frame)
+
+        # Kalibrasyonu başlatmak için 'c' tuşuna bas
+        if cv2.waitKey(1) & 0xFF == ord('c'):
+            calibration_started = True
+            eye_positions.clear()  # Önceki kalibrasyon verilerini temizle
+            print("Kalibrasyon Başladı! Lütfen gözlerinizi 3 saniye boyunca sabit tutun.")
+
+        # Çıkış için 'q' tuşuna bas
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    track_eyes()
